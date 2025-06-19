@@ -22,6 +22,44 @@ function App() {
     }
   }, [])
 
+  // 当HTML内容改变时，自动生成分享链接
+  useEffect(() => {
+    const generateShareLink = async () => {
+      if (!html.trim()) {
+        setShareUrl('')
+        return
+      }
+      
+      try {
+        setIsLoading(true)
+        const response = await fetch(`${API_BASE}/api/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ html }),
+        })
+        const data = await response.json()
+        if (response.ok) {
+          setShareUrl(data.url)
+          setError('')
+        } else {
+          console.error('生成链接失败:', data.error)
+          setError(data.error || '生成链接失败')
+        }
+      } catch (err) {
+        console.error('网络错误:', err)
+        setError('网络错误，请稍后重试')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // 使用防抖，避免频繁请求
+    const timeoutId = setTimeout(generateShareLink, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [html])
+
   const fetchHtml = async (id) => {
     try {
       const response = await fetch(`${API_BASE}/api/html/${id}`)
@@ -34,39 +72,6 @@ function App() {
       }
     } catch (err) {
       setError('加载失败，请稍后重试')
-    }
-  }
-
-  const handleShare = async () => {
-    if (!html.trim()) {
-      setError('请先输入HTML代码')
-      return
-    }
-
-    setIsLoading(true)
-    setError('')
-    
-    try {
-      const response = await fetch(`${API_BASE}/api/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ html }),
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setShareUrl(data.url)
-        setError('')
-        // 生成链接后自动切换到预览标签
-        setActiveTab('preview')
-      } else {
-        setError(data.error || '保存失败')
-      }
-    } catch (err) {
-      setError('网络错误，请稍后重试')
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -88,6 +93,16 @@ function App() {
       </div>
 
       <div className="content-container">
+        {activeTab === 'preview' && shareUrl && (
+          <div className="share-url">
+            分享链接：
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer">
+              {shareUrl}
+            </a>
+            {isLoading && <span className="loading-indicator">生成中...</span>}
+          </div>
+        )}
+
         {activeTab === 'edit' ? (
           <div className="edit-container">
             <textarea
@@ -96,24 +111,7 @@ function App() {
               placeholder="在此输入HTML代码..."
               className="html-input"
             />
-            <div className="button-container">
-              <button 
-                onClick={handleShare} 
-                className="share-button"
-                disabled={isLoading}
-              >
-                {isLoading ? '生成中...' : '生成分享链接'}
-              </button>
-            </div>
             {error && <div className="error">{error}</div>}
-            {shareUrl && (
-              <div className="share-url">
-                分享链接：
-                <a href={shareUrl} target="_blank" rel="noopener noreferrer">
-                  {shareUrl}
-                </a>
-              </div>
-            )}
           </div>
         ) : (
           <div className="preview-container">
