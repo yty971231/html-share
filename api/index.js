@@ -1,170 +1,122 @@
 const express = require('express');
+const { createClient } = require('redis');
 const cors = require('cors');
-const { nanoid } = require('nanoid');
-const { kv } = require('@vercel/kv');
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// 检查KV连接
-const checkKVConnection = async () => {
-    try {
-        // 尝试设置一个测试值
-        const testKey = `test_${Date.now()}`;
-        await kv.set(testKey, 'test');
-        const testValue = await kv.get(testKey);
-        await kv.del(testKey);
-
-        if (testValue !== 'test') {
-            console.error('KV connection test failed: value mismatch');
-            return false;
-        }
-
-        console.log('Successfully connected to Vercel KV');
-        return true;
-    } catch (error) {
-        console.error('Failed to connect to Vercel KV:', error);
-        return false;
+// 创建 Redis 客户端
+const redis = createClient({
+  url: process.env.REDIS_URL,
+  socket: {
+    reconnectStrategy: (retries) => {
+      console.log(`Redis 重连尝试次数: ${retries}`);
+      return Math.min(retries * 100, 3000);
     }
-};
+  }
+});
 
-// 检查环境变量
-const checkEnvironment = () => {
-    const requiredEnvVars = ['KV_URL', 'KV_REST_API_URL', 'KV_REST_API_TOKEN'];
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    
-    if (missingVars.length > 0) {
-        console.error('Missing required environment variables:', missingVars);
-        return false;
+redis.on('error', err => {
+  console.error('Redis 客户端错误:', err);
+  console.error('Redis URL:', process.env.REDIS_URL ? '已设置' : '未设置');
+});
+
+redis.on('connect', () => {
+  console.log('Redis 连接成功');
+});
+
+redis.on('reconnecting', () => {
+  console.log('Redis 正在重新连接...');
+});
+
+// 连接到 Redis
+redis.connect().catch(err => {
+  console.error('Redis 连接错误:', err);
+  console.error('环境变量:', {
+    REDIS_URL: process.env.REDIS_URL ? '已设置' : '未设置',
+    NODE_ENV: process.env.NODE_ENV
+  });
+});
+
+// 测试 Redis 连接
+app.get('/api/test', async (req, res) => {
+  try {
+    if (!redis.isOpen) {
+      await redis.connect();
     }
-    
-    return true;
-};
+    await redis.set('test', 'connection successful');
+    const value = await redis.get('test');
+    console.log('Redis 测试成功:', value);
+    res.json({ status: 'success', message: value });
+  } catch (error) {
+    console.error('Redis 测试错误:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: error.message,
+      details: {
+        isConnected: redis.isOpen,
+        hasRedisUrl: Boolean(process.env.REDIS_URL)
+      }
+    });
+  }
+});
 
-// 保存HTML内容并生成唯一ID
+// 保存 HTML 内容
 app.post('/api/save', async (req, res) => {
-    try {
-        // 检查环境变量
-        if (!checkEnvironment()) {
-            console.error('Environment variables not properly configured');
-            return res.status(500).json({ error: '服务器配置错误，请联系管理员' });
-        }
-
-        const { html } = req.body;
-        if (!html) {
-            return res.status(400).json({ error: '需要提供HTML内容' });
-        }
-
-        if (html.length > 1000000) { // 1MB限制
-            return res.status(400).json({ error: 'HTML内容过大' });
-        }
-
-        // 检查KV连接
-        const isConnected = await checkKVConnection();
-        if (!isConnected) {
-            console.error('KV storage is not available');
-            return res.status(500).json({ error: '存储服务暂时不可用，请稍后重试' });
-        }
-
-        const id = nanoid(10);
-        console.log(`Attempting to save HTML content with ID: ${id}`);
-        
-        // 使用KV存储
-        await kv.set(id, html);
-        console.log(`Successfully saved HTML content with ID: ${id}`);
-        
-        const host = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : `http://${req.get('host')}`;
-        const url = `${host}/view/${id}`;
-        console.log(`Generated share URL: ${url}`);
-        
-        res.json({ id, url });
-    } catch (error) {
-        console.error('Error saving HTML:', error);
-        res.status(500).json({ error: '保存失败，请稍后重试' });
+  try {
+    const { html } = req.body;
+    if (!html) {
+      return res.status(400).json({ status: 'error', message: 'HTML content is required' });
     }
+    
+    if (html.length > 1000000) { // 1MB 限制
+      return res.status(400).json({ status: 'error', message: 'Content too large' });
+    }
+
+    if (!redis.isOpen) {
+      await redis.connect();
+    }
+
+    const id = Math.random().toString(36).substring(2, 15);
+    await redis.set(id, html, {
+      EX: 60 * 60 * 24 * 7 // 7天过期
+    });
+
+    res.json({ status: 'success', id });
+  } catch (error) {
+    console.error('保存内容错误:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
-// 获取HTML内容
-app.get('/api/html/:id', async (req, res) => {
-    try {
-        if (!checkEnvironment()) {
-            return res.status(500).json({ error: '服务器配置错误，请联系管理员' });
-        }
-
-        const { id } = req.params;
-        console.log(`Attempting to fetch HTML content for ID: ${id}`);
-        
-        const isConnected = await checkKVConnection();
-        if (!isConnected) {
-            return res.status(500).json({ error: '存储服务暂时不可用，请稍后重试' });
-        }
-
-        const html = await kv.get(id);
-        
-        if (!html) {
-            console.log(`HTML content not found for ID: ${id}`);
-            return res.status(404).json({ error: '未找到对应的HTML内容' });
-        }
-        
-        console.log(`Successfully retrieved HTML content for ID: ${id}`);
-        res.json({ html });
-    } catch (error) {
-        console.error('Error fetching HTML:', error);
-        res.status(500).json({ error: '获取内容失败，请稍后重试' });
+// 获取 HTML 内容
+app.get('/api/load/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!redis.isOpen) {
+      await redis.connect();
     }
+
+    const html = await redis.get(id);
+    if (!html) {
+      return res.status(404).json({ status: 'error', message: 'Content not found' });
+    }
+
+    res.json({ status: 'success', html });
+  } catch (error) {
+    console.error('加载内容错误:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
-// 渲染HTML页面
-app.get('/view/:id', async (req, res) => {
-    try {
-        if (!checkEnvironment()) {
-            return res.status(500).send('服务器配置错误，请联系管理员');
-        }
-
-        const { id } = req.params;
-        console.log(`Attempting to render HTML content for ID: ${id}`);
-        
-        const isConnected = await checkKVConnection();
-        if (!isConnected) {
-            return res.status(500).send('存储服务暂时不可用，请稍后重试');
-        }
-
-        const html = await kv.get(id);
-        
-        if (!html) {
-            console.log(`HTML content not found for ID: ${id}`);
-            return res.status(404).send('页面未找到');
-        }
-        
-        console.log(`Successfully rendering HTML content for ID: ${id}`);
-        res.send(html);
-    } catch (error) {
-        console.error('Error rendering HTML:', error);
-        res.status(500).send('服务器错误，请稍后重试');
-    }
-});
-
-// 健康检查接口
-app.get('/api/health', async (req, res) => {
-    const envCheck = checkEnvironment();
-    if (!envCheck) {
-        return res.status(500).json({ 
-            status: 'unhealthy',
-            error: 'Missing environment variables'
-        });
-    }
-
-    const isConnected = await checkKVConnection();
-    if (isConnected) {
-        res.json({ status: 'healthy' });
-    } else {
-        res.status(500).json({ 
-            status: 'unhealthy',
-            error: 'KV connection failed'
-        });
-    }
-});
+// 本地开发服务器
+if (process.env.NODE_ENV !== 'production') {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`API server running on port ${port}`);
+  });
+}
 
 module.exports = app; 
