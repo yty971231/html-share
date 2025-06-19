@@ -11,21 +11,23 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
+html, body, #root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 .app-container {
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
   display: flex;
   flex-direction: column;
 }
 
 .app-header {
+  padding: 1rem 2rem;
   background-color: white;
   border-bottom: 1px solid var(--border-color);
-  padding: 1rem 2rem;
 }
 
 .app-header h1 {
@@ -35,35 +37,31 @@ body {
 }
 
 .tab-container {
-  display: flex;
   margin-top: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 1rem;
 }
 
 .tab-button {
-  padding: 0.75rem 2rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1.5rem;
+  border: 1px solid var(--border-color);
+  background: white;
+  border-radius: 0.5rem;
   cursor: pointer;
-  font-size: 1rem;
-  color: #64748b;
-}
-
-.tab-button:hover {
-  color: var(--primary-color);
+  font-size: 0.875rem;
 }
 
 .tab-button.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
 }
 
 .app-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 100px); /* 减去header的高度 */
+  overflow: hidden;
 }
 
 .share-url-container {
@@ -96,40 +94,30 @@ body {
   cursor: pointer;
 }
 
-.copy-button:hover {
-  background-color: var(--primary-hover);
-}
-
-.loading, .no-share {
-  color: #64748b;
-}
-
 .content-container {
   flex: 1;
-  display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 .editor-container,
 .preview-container {
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
 }
 
 .html-editor {
   width: 100%;
   height: 100%;
-  padding: 1rem 2rem;
+  padding: 1rem;
   border: none;
   resize: none;
   font-family: monospace;
   font-size: 1rem;
   line-height: 1.5;
-  background-color: white;
-}
-
-.html-editor:focus {
-  outline: none;
 }
 
 .preview-frame {
