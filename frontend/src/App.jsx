@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 // 获取API基础URL
@@ -11,8 +11,41 @@ function App() {
   const [shareUrl, setShareUrl] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('edit') // 'edit' 或 'preview'
+  const [isLoading, setIsLoading] = useState(false)
+
+  // 如果URL中包含view参数，则加载对应的HTML内容
+  useEffect(() => {
+    const path = window.location.pathname
+    if (path.startsWith('/view/')) {
+      const id = path.split('/view/')[1]
+      fetchHtml(id)
+    }
+  }, [])
+
+  const fetchHtml = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/html/${id}`)
+      const data = await response.json()
+      if (response.ok) {
+        setHtml(data.html)
+        setActiveTab('preview')
+      } else {
+        setError(data.error || '加载失败')
+      }
+    } catch (err) {
+      setError('加载失败，请稍后重试')
+    }
+  }
 
   const handleShare = async () => {
+    if (!html.trim()) {
+      setError('请先输入HTML代码')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    
     try {
       const response = await fetch(`${API_BASE}/api/save`, {
         method: 'POST',
@@ -32,6 +65,8 @@ function App() {
       }
     } catch (err) {
       setError('网络错误，请稍后重试')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -62,14 +97,12 @@ function App() {
               className="html-input"
             />
             <div className="button-container">
-              <button onClick={handleShare} className="share-button">
-                生成分享链接
-              </button>
               <button 
-                onClick={() => setActiveTab('preview')} 
-                className="preview-button"
+                onClick={handleShare} 
+                className="share-button"
+                disabled={isLoading}
               >
-                查看预览 →
+                {isLoading ? '生成中...' : '生成分享链接'}
               </button>
             </div>
             {error && <div className="error">{error}</div>}
