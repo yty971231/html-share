@@ -13,7 +13,7 @@ const client = Redis.createClient({
 
 client.on('error', (err) => console.error('Redis Client Error:', err));
 
-// 保存 HTML 内容
+// 保存 HTML 内容 - 移除过期时间设置
 app.post('/api/save', async (req, res) => {
   try {
     await client.connect();
@@ -26,9 +26,8 @@ app.post('/api/save', async (req, res) => {
     // 生成唯一ID
     const id = Math.random().toString(36).substring(2, 15);
     
-    // 存储到 Redis，设置7天过期
+    // 存储到 Redis，不设置过期时间
     await client.set(`html:${id}`, html);
-    await client.expire(`html:${id}`, 60 * 60 * 24 * 7);
 
     res.json({ id });
   } catch (error) {
@@ -47,7 +46,7 @@ app.get('/api/html/:id', async (req, res) => {
     const html = await client.get(`html:${id}`);
     
     if (!html) {
-      return res.status(404).json({ error: '内容不存在或已过期' });
+      return res.status(404).json({ error: '内容不存在' });
     }
 
     res.json({ html });
@@ -67,7 +66,7 @@ app.get('/view/:id', async (req, res) => {
     const html = await client.get(`html:${id}`);
     
     if (!html) {
-      return res.status(404).send('内容不存在或已过期');
+      return res.status(404).send('内容不存在');
     }
 
     // 直接返回用户的 HTML 内容
