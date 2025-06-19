@@ -9,6 +9,10 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/view/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
