@@ -1,14 +1,8 @@
 {
-    "name": "html-share",
-    "version": "1.0.0",
-    "private": true,
-    "scripts": {
-        "build": "cd frontend && npm install && npm run build && cp -r dist/* .",
-        "vercel-build": "cd frontend && npm install && npm run build && cp -r dist/* ."
-    },
-    "dependencies": {
-        "cors": "^2.8.5",
-        "express": "^4.18.2",
-        "nanoid": "^3.3.4"
-    }
-} 
+  "name": "html-share",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "vercel-build": "cd frontend && npm install && npm run build"
+  }
+}
