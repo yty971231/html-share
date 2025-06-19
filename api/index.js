@@ -59,7 +59,7 @@ app.get('/api/html/:id', async (req, res) => {
   }
 });
 
-// 查看页面路由
+// 查看页面路由 - 直接返回完整的 HTML 页面
 app.get('/view/:id', async (req, res) => {
   try {
     await client.connect();
@@ -70,7 +70,20 @@ app.get('/view/:id', async (req, res) => {
       return res.status(404).send('内容不存在或已过期');
     }
 
-    res.send(html);
+    // 直接返回用户的 HTML 内容
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>HTML 预览</title>
+        </head>
+        <body>
+          ${html}
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('获取失败:', error);
     res.status(500).send('服务器错误');
