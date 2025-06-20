@@ -4,7 +4,9 @@ const Redis = require('redis');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// **唯一的修改点**：将请求体大小限制提高到 4mb
+app.use(express.json({ limit: '4mb' }));
 
 // Redis 客户端配置
 const client = Redis.createClient({
