@@ -4,7 +4,8 @@ const Redis = require('redis');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// 提高请求体大小限制到4mb
+app.use(express.json({ limit: '4mb' }));
 
 // Redis 客户端配置
 const client = Redis.createClient({
@@ -13,14 +14,14 @@ const client = Redis.createClient({
 
 client.on('error', (err) => console.error('Redis Client Error:', err));
 
-// 保存 HTML 内容 - 移除过期时间设置
+// 保存 HTML 内容
 app.post('/api/save', async (req, res) => {
   try {
     await client.connect();
     const { html } = req.body;
     
     if (!html) {
-      return res.status(400).json({ error: '请提供 HTML 内容' });
+      return res.status(400).json({ message: '请提供 HTML 内容' });
     }
 
     // 生成唯一ID
@@ -32,7 +33,7 @@ app.post('/api/save', async (req, res) => {
     res.json({ id });
   } catch (error) {
     console.error('保存失败:', error);
-    res.status(500).json({ error: '保存失败' });
+    res.status(500).json({ message: '保存失败，服务器内部错误' });
   } finally {
     await client.disconnect();
   }
@@ -46,13 +47,13 @@ app.get('/api/html/:id', async (req, res) => {
     const html = await client.get(`html:${id}`);
     
     if (!html) {
-      return res.status(404).json({ error: '内容不存在' });
+      return res.status(404).json({ message: '内容不存在' });
     }
 
     res.json({ html });
   } catch (error) {
     console.error('获取失败:', error);
-    res.status(500).json({ error: '获取失败' });
+    res.status(500).json({ message: '获取失败，服务器内部错误' });
   } finally {
     await client.disconnect();
   }
@@ -83,12 +84,31 @@ app.get('/view/:id', async (req, res) => {
         </body>
       </html>
     `);
-  } catch (error) {
+  } catch (error)
+ {
     console.error('获取失败:', error);
     res.status(500).send('服务器错误');
   } finally {
     await client.disconnect();
   }
 });
+
+
+// 自定义错误处理中间件，用于捕获特定错误
+app.use((err, req, res, next) => {
+  // 捕获请求体过大的错误
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'HTML内容过大，请保持在4MB以下。' });
+  }
+  
+  // 捕获其他JSON解析错误
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ message: '请求格式无效。' });
+  }
+
+  // 对于其他未知错误，传递给下一个错误处理器
+  next(err);
+});
+
 
 module.exports = app;
